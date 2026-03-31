@@ -1,6 +1,8 @@
 services:
   formulario-app:
-    image: formulario-proyecto:latest
+    # Imagen publicada por GitHub Actions en cada push a main
+    # Reemplaza 'dsantos-sudo' con tu usuario y el nombre exacto del repo en GitHub
+    image: ghcr.io/dsantos-sudo/formulario-nuevo-registro-:latest
     container_name: formulario-contenedor
     restart: always
     ports:
@@ -9,8 +11,7 @@ services:
       - NODE_ENV=production
       - PORT=7000
       - HOSTNAME=0.0.0.0
-      # Las variables secretas se pasan desde el entorno del host
-      # o desde un archivo .env que NO debe estar en el repositorio
+      # Las variables secretas se leen del entorno del host (no hardcodeadas)
       - ODOO_API_URL=${ODOO_API_URL}
       - ODOO_API_KEY=${ODOO_API_KEY}
     # Límites de recursos para prevenir DoS
@@ -25,7 +26,7 @@ services:
     # Seguridad: contenedor sin privilegios adicionales
     security_opt:
       - no-new-privileges:true
-    # Solo lectura el filesystem del contenedor (Next.js standalone lo soporta)
+    # Solo lectura el filesystem del contenedor
     read_only: true
     tmpfs:
       - /tmp
@@ -36,19 +37,21 @@ services:
       retries: 3
       start_period: 30s
 
-  # Despliegue continuo: monitorea y actualiza el contenedor automáticamente
+  # Despliegue continuo: monitorea ghcr.io y actualiza el contenedor automáticamente
   watchtower:
     image: containrrr/watchtower
     container_name: formulario-watchtower
     restart: always
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      # Credenciales para hacer pull de ghcr.io (registro privado)
+      - /root/.docker/config.json:/config.json:ro
     environment:
-      - WATCHTOWER_CLEANUP=true          # Elimina imágenes antiguas
+      - WATCHTOWER_CLEANUP=true          # Elimina imágenes antiguas tras actualizar
       - WATCHTOWER_POLL_INTERVAL=30      # Chequea cada 30 segundos
-      - WATCHTOWER_LABEL_ENABLE=false    # Monitorea todos los contenedores
       - WATCHTOWER_INCLUDE_STOPPED=false
+      - DOCKER_CONFIG=/config.json
     security_opt:
       - no-new-privileges:true
-    # Limitar Watchtower a solo monitorear nuestro contenedor
+    # Solo monitorear nuestro contenedor (no todos los del servidor)
     command: formulario-contenedor
