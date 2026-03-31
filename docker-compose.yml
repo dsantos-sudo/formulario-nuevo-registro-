@@ -1,0 +1,14 @@
+services:
+  formulario-app:
+    # Nombre que tendrá la imagen cuando la construyas
+    image: formulario-proyecto:latest
+    container_name: formulario-contenedor
+    restart: always
+    ports:
+      - "7000:7000" # Mapea el puerto del host al del contenedor
+    env_file:
+      - .env
+    environment:
+      - HOSTNAME=0.0.0.0
+      - PORT=7000
+      - NODE_ENV=production

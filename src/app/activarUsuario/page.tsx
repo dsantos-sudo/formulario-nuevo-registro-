@@ -22,7 +22,7 @@ const opcionesTenencia = [
   { value: 'Arrendado', label: 'Arrendado' }
 ];
 
-// --- UTILS ---
+// --- UTILS (Sin cambios) ---
 const toBase64 = (file: File) => new Promise((resolve, reject) => {
   const reader = new FileReader();
   reader.readAsDataURL(file);
@@ -58,7 +58,7 @@ const processFile = (file: File): Promise<string> => {
   });
 };
 
-// --- ESTILOS SELECT ---
+// --- ESTILOS SELECT (Sin cambios) ---
 const customSelectStyles = {
   control: (base: any, state: any) => ({
     ...base,
@@ -104,7 +104,7 @@ export default function ActivacionUsuario() {
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorList, setErrorList] = useState<string[]>([]);
 
-  // Variable de entorno para la API
+  // Variable de entorno para la API (Si no existe, usa string vacío para ruta relativa)
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
 
   // --- DATOS API ---
@@ -167,6 +167,7 @@ export default function ActivacionUsuario() {
     if (backup) {
       try {
         const { timestamp, data } = JSON.parse(backup);
+        // Si la copia tiene menos de 24 horas
         if (Date.now() - timestamp < 24 * 60 * 60 * 1000) {
           const confirmar = window.confirm("Detectamos que hubo un problema de conexión en su último intento. ¿Desea recuperar la información?");
           if (confirmar) {
@@ -232,20 +233,26 @@ export default function ActivacionUsuario() {
     if (errors[e.target.name]) setErrors({ ...errors, [e.target.name]: null });
   };
 
+  // --- VALIDACIÓN PDF Y PESO ---
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'rif' | 'contrato') => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+
+      // 1. Validar Tipo PDF
       if (file.type !== 'application/pdf') {
         alert("Error: Solo se permiten archivos en formato PDF.");
-        e.target.value = '';
+        e.target.value = ''; // Limpiar input
         return;
       }
+
+      // 2. Validar Peso (> 5MB)
       const maxBytes = 5 * 1024 * 1024;
       if (file.size > maxBytes) {
         alert("El archivo pesa más de 5MB. Por favor comprímalo antes de subirlo.");
         e.target.value = '';
         return;
       }
+
       if (type === 'rif') { setFileRif(file); setErrors({ ...errors, fileRif: null }); }
       else { setFileContrato(file); setErrors({ ...errors, fileContrato: null }); }
     }
@@ -296,11 +303,17 @@ export default function ActivacionUsuario() {
       setShowErrorModal(true);
       return false;
     }
+
     setErrors({});
     return true;
   };
 
-  const handleNext = () => { if (validateStep()) { setCurrentStep(p => p + 1); window.scrollTo(0, 0); } };
+  const handleNext = () => {
+    if (validateStep()) {
+      setCurrentStep(p => p + 1);
+      window.scrollTo(0, 0);
+    }
+  };
   const handleBack = () => { setCurrentStep(p => p - 1); window.scrollTo(0, 0); };
 
   const handleSubmit = async () => {
@@ -308,19 +321,30 @@ export default function ActivacionUsuario() {
     let missingFields: string[] = [];
     if (!fileRif) { newErrors.fileRif = true; missingFields.push("RIF Digital"); }
     if (!fileContrato) { newErrors.fileContrato = true; missingFields.push("Contrato/Documento"); }
-    if (missingFields.length > 0) { setErrors(newErrors); setErrorList(missingFields); setShowErrorModal(true); return; }
+
+    if (missingFields.length > 0) {
+      setErrors(newErrors);
+      setErrorList(missingFields);
+      setShowErrorModal(true);
+      return;
+    }
 
     setLoading(true);
     try {
       const rifBase64 = await processFile(fileRif!);
       const contratoBase64 = fileContrato ? await processFile(fileContrato) : "";
+      const taxIdPersonNumber = formData.tax_id_number_person;
+      const taxIdCompanyNumber = formData.tax_id_number;
+
       const workersInt = workersCount ? parseInt(workersCount.value.replace(/\D/g, '') || '0') : 0;
       const tablesInt = tablesCount ? parseInt(tablesCount.value.replace(/\D/g, '') || '0') : 0;
 
       const payload = {
         ...formData,
         tax_id_document_type_person: prefijoCedula?.value,
+        tax_id_number_person: taxIdPersonNumber,
         tax_id_document_type: prefijoRif?.value,
+        tax_id_number: taxIdCompanyNumber,
         fiscal_state_id: fiscalState?.value,
         fiscal_municipality_id: fiscalMuni?.value,
         fiscal_parish_id: fiscalParish?.value,
@@ -332,6 +356,7 @@ export default function ActivacionUsuario() {
         area_size_full: parseFloat(formData.area_size_full) || 0.0,
         area_size_util: parseFloat(formData.area_size_util) || 0.0,
         tenancy_type: tenenciaSelect?.value,
+        electricity_contract: formData.electricity_contract,
         tax_id_photo: rifBase64,
         rental_contract_photo: contratoBase64,
       };
@@ -340,14 +365,32 @@ export default function ActivacionUsuario() {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
       });
       const result = await res.json();
-      if (result.success) { localStorage.removeItem('backup_error_envio'); setIsSuccess(true); } 
-      else { alert(`Error: ${result.error || 'Verifique los datos'}`); }
+
+      if (result.success) {
+        // SI ÉXITO: Borrar cualquier backup pendiente
+        localStorage.removeItem('backup_error_envio');
+        setIsSuccess(true);
+      } else {
+        alert(`Error: ${result.error || 'Verifique los datos'}`);
+      }
     } catch (error) {
-      const dataToSave = { formData, prefijoCedula, prefijoRif, workersCount, tablesCount, tenenciaSelect, fiscalState, fiscalMuni, fiscalParish, serviceState, serviceMuni, serviceParish };
-      localStorage.setItem('backup_error_envio', JSON.stringify({ timestamp: Date.now(), data: dataToSave }));
-      alert('Error de conexión. Se guardó una copia de seguridad en su navegador por 24 horas.');
-    } finally { setLoading(false); }
+      // --- GUARDADO EMERGENCIA (MAL INTERNET) ---
+      const dataToSave = {
+        formData,
+        prefijoCedula, prefijoRif, workersCount, tablesCount, tenenciaSelect,
+        fiscalState, fiscalMuni, fiscalParish,
+        serviceState, serviceMuni, serviceParish
+      };
+      const backupData = { timestamp: Date.now(), data: dataToSave };
+      localStorage.setItem('backup_error_envio', JSON.stringify(backupData));
+
+      alert('Error de conexión. Se guardó una copia de seguridad en su navegador por 24 horas. Si recarga, podrá recuperarla.');
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const toggleDarkMode = () => setDarkMode(v => !v);
 
   if (isSuccess) {
     return (
@@ -356,7 +399,7 @@ export default function ActivacionUsuario() {
           <div className="checkmark-container"><FaCheckCircle className="checkmark-icon" /></div>
           <h2>¡Solicitud Enviada!</h2>
           <p className="success-text">Hemos recibido tu información correctamente. Recibirás respuesta en 48 horas.</p>
-          <button className="ios-btn-black" onClick={() => window.location.reload()}>Finalizar</button>
+          <button className="ios-btn-black" onClick={() => router.push('/')}>Volver al Inicio</button>
         </div>
         <style jsx>{`
             .success-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); backdrop-filter: blur(8px); display: flex; justify-content: center; align-items: center; z-index: 9999; font-family: var(--font-poppins); }
@@ -372,9 +415,11 @@ export default function ActivacionUsuario() {
   }
 
   return (
-    <div className={`activacion-page activacion--light loaded ${poppins.variable}`}>
-      {loading && <LoadingScreen />}
+    <div className={`activacion-page ${darkMode ? 'activacion--dark' : 'activacion--light'} ${isLoaded ? 'loaded' : ''} ${poppins.variable}`}>
       
+      {loading && <LoadingScreen />}
+
+      {/* --- MODAL DE ERROR ESTILO IOS --- */}
       {showErrorModal && (
         <div className="modal-overlay" onClick={() => setShowErrorModal(false)}>
           <div className="ios-modal-content" onClick={e => e.stopPropagation()}>
@@ -382,6 +427,7 @@ export default function ActivacionUsuario() {
               <h3>Atención</h3>
               <button className="ios-close-btn" onClick={() => setShowErrorModal(false)}><FaTimes /></button>
             </div>
+
             <div className="ios-modal-body">
               <p className="ios-modal-subtitle">Por favor complete los campos obligatorios:</p>
               <div className="ios-list-container">
@@ -393,56 +439,95 @@ export default function ActivacionUsuario() {
                 ))}
               </div>
             </div>
-            <button className="ios-btn-black" onClick={() => setShowErrorModal(false)}>Entendido</button>
+
+            <button className="ios-btn-black" onClick={() => setShowErrorModal(false)}>
+              Entendido
+            </button>
           </div>
         </div>
       )}
 
+      {/* --- MODAL DE ÁREAS ESTILO IOS --- */}
       {showAreaModal && (
         <div className="modal-overlay" onClick={() => setShowAreaModal(false)}>
           <div className="ios-modal-content" onClick={e => e.stopPropagation()}>
             <div className="ios-modal-header">
-              <h3>¿Cómo medir las áreas?</h3>
+              <h3>¿Cómo medir las áreas utiles, especial y total?</h3>
               <button className="ios-close-btn" onClick={() => setShowAreaModal(false)}><FaTimes /></button>
             </div>
             <div className="ios-modal-body">
-              <p className="ios-info-text">El Área Útil se refiere solo a los espacios operativos usados para su negocio. El Área Total incluye la superficie completa.</p>
-              <div className="ios-info-card"><h4>Área Útil (m²)</h4><p>Espacios donde realmente trabaja (piso de venta, oficina, etc).</p></div>
-              <div className="ios-info-card"><h4>Área Total (m²)</h4><p>Superficie completa del inmueble.</p></div>
+              <p className="ios-info-text">El Área Útil se refiere solo a los espacios operativos usados para su negocio, y esta medida podrá ser revisada por nuestro personal. Para locales vacíos o sin actividad, debe indicar el Área Total en ambos campos.</p>
+
+              <div className="ios-info-card">
+                <h4>Área Útil (m²)</h4>
+                <p>Se refiere únicamente a los espacios operativos. es decir, el área que se utiliza específicamente para las actividades de su negocio.</p>
+                <p>Importante: Esta medida está sujeta a revisión por parte del equipo especializado y podría ser objeto de inspección.</p>
+              </div>
+
+              <div className="ios-info-card">
+                <h4>Área Total (m²)</h4>
+                <p>Se refiere a la superficie completa del establecimiento.</p>
+              </div>
+
+              <div className="ios-info-card special">
+                <h4>Caso Especial (Inmuebles Vacíos):</h4>
+                <p>Si el local o inmueble se encuentra vacío o sin actividad, deberá indicar la superficie total en ambos campos (tanto en Área Total como en Área Útil).</p>
+              </div>
             </div>
-            <button className="ios-btn-black" onClick={() => setShowAreaModal(false)}>Cerrar guía</button>
+            <button className="ios-btn-black" onClick={() => setShowAreaModal(false)}>
+              Cerrar guía
+            </button>
           </div>
         </div>
       )}
 
+      {/* CONTENIDO PRINCIPAL */}
       <div className="form-container">
         <div className="main-content-box">
           <div className="hero-banner">
-            <div className="hero-overlay"><div className="hero-text"><h1>¡Registra tu empresa!</h1><p>Complete el formulario.</p></div></div>
+            <div className="hero-overlay">
+              <div className="hero-text"><h1>¡Registra tu empresa!</h1><p>Complete el formulario.</p></div>
+            </div>
           </div>
-          <div className="step-indicator">Paso {currentStep} de 4<div className="progress-bar"><div className="progress-fill" style={{ width: `${currentStep * 25}%` }}></div></div></div>
-          
+
+          <div className="step-indicator">
+            Paso {currentStep} de 4
+            <div className="progress-bar"><div className="progress-fill" style={{ width: `${currentStep * 25}%` }}></div></div>
+          </div>
+
           <form className="activacion-form" onSubmit={(e) => e.preventDefault()}>
+            {/* PASO 1 */}
             {currentStep === 1 && (
               <div className="step-content">
                 <div className="section-bar">Datos de contacto</div>
                 <div className="form-grid three-cols">
-                  <div className="input-group"><div className={`input-pill ${errors.name_person ? 'error-border' : ''}`}><input name="name_person" onChange={handleChange} value={formData.name_person} placeholder="Nombre(s)" /></div></div>
-                  <div className="input-group"><div className={`input-pill ${errors.last_name_person ? 'error-border' : ''}`}><input name="last_name_person" onChange={handleChange} value={formData.last_name_person} placeholder="Apellido(s)" /></div></div>
+                  <div className="input-group">
+                    <div className={`input-pill ${errors.name_person ? 'error-border' : ''}`}><input name="name_person" onChange={handleChange} value={formData.name_person} placeholder="Nombre(s)" /></div>
+                  </div>
+                  <div className="input-group">
+                    <div className={`input-pill ${errors.last_name_person ? 'error-border' : ''}`}><input name="last_name_person" onChange={handleChange} value={formData.last_name_person} placeholder="Apellido(s)" /></div>
+                  </div>
                   <div className="input-group">
                     <div className={`input-pill combined ${errors.tax_id_number_person ? 'error-border' : ''}`}>
                       <Select instanceId="pref-ced" options={docTypes} value={prefijoCedula} onChange={setPrefijoCedula} placeholder="V" styles={prefixStyles} isSearchable={false} />
                       <div className="vert-divider"></div>
-                      <input name="tax_id_number_person" onChange={handleChange} value={formData.tax_id_number_person} placeholder="Cédula / Pasaporte" type="number" />
+                      <input name="tax_id_number_person" onChange={handleChange} value={formData.tax_id_number_person} placeholder="Cédula de identidad o pasaporte" type="number" />
                     </div>
                   </div>
-                  <div className="input-group"><div className={`input-pill ${errors.mobile ? 'error-border' : ''}`}><input name="mobile" onChange={handleChange} value={formData.mobile} placeholder="Celular" /></div></div>
-                  <div className="input-group"><div className={`input-pill ${errors.phone ? 'error-border' : ''}`}><input name="phone" onChange={handleChange} value={formData.phone} placeholder="Teléfono local" /></div></div>
-                  <div className="input-group"><div className={`input-pill ${errors.email ? 'error-border' : ''}`}><input name="email" onChange={handleChange} value={formData.email} placeholder="Correo electrónico" type="email" /></div></div>
+                  <div className="input-group">
+                    <div className={`input-pill ${errors.mobile ? 'error-border' : ''}`}><input name="mobile" onChange={handleChange} value={formData.mobile} placeholder="Número de teléfono celular" /></div>
+                  </div>
+                  <div className="input-group">
+                    <div className={`input-pill ${errors.phone ? 'error-border' : ''}`}><input name="phone" onChange={handleChange} value={formData.phone} placeholder="Número de teléfono local" /></div>
+                  </div>
+                  <div className="input-group">
+                    <div className={`input-pill ${errors.email ? 'error-border' : ''}`}><input name="email" onChange={handleChange} value={formData.email} placeholder="Correo electrónico" type="email" /></div>
+                  </div>
                 </div>
               </div>
             )}
 
+            {/* PASO 2 */}
             {currentStep === 2 && (
               <div className="step-content">
                 <div className="section-bar">Datos establecimiento</div>
@@ -451,58 +536,96 @@ export default function ActivacionUsuario() {
                     <div className={`input-pill combined ${errors.tax_id_number ? 'error-border' : ''}`}>
                       <Select instanceId="pref-rif" options={docTypes} value={prefijoRif} onChange={setPrefijoRif} placeholder="J" styles={prefixStyles} isSearchable={false} />
                       <div className="vert-divider"></div>
-                      <input name="tax_id_number" onChange={handleChange} value={formData.tax_id_number} placeholder="RIF" type="number" />
+                      <input name="tax_id_number" onChange={handleChange} value={formData.tax_id_number} placeholder="Ingrese el RIF de su establecimiento" type="number" />
                     </div>
                   </div>
-                  <div className="input-group"><div className={`input-pill ${errors.legal_name ? 'error-border' : ''}`}><input name="legal_name" onChange={handleChange} value={formData.legal_name} placeholder="Razón Social" /></div></div>
-                  <div className="input-group"><div className={`input-pill ${errors.commercial_name ? 'error-border' : ''}`}><input name="commercial_name" onChange={handleChange} value={formData.commercial_name} placeholder="Nombre Comercial" /></div></div>
-                </div>
-                <div className="form-grid four-cols-custom" style={{ marginTop: '25px' }}>
-                  <Select instanceId="f-state" options={states} placeholder="Estado" styles={customSelectStyles} onChange={handleFiscalState} value={fiscalState} hasError={!!errors.fiscalState} />
-                  <Select instanceId="f-muni" options={fiscalMunis} placeholder="Municipio" styles={customSelectStyles} onChange={handleFiscalMuni} value={fiscalMuni} isDisabled={!fiscalState} hasError={!!errors.fiscalMuni} />
-                  <Select instanceId="f-parish" options={fiscalParishes} placeholder="Parroquia" styles={customSelectStyles} onChange={handleFiscalParish} value={fiscalParish} isDisabled={!fiscalMuni} hasError={!!errors.fiscalParish} />
-                  <div className={`input-pill ${errors.fiscal_address ? 'error-border' : ''}`}><input name="fiscal_address" onChange={handleChange} value={formData.fiscal_address} placeholder="Dirección Fiscal" /></div>
-                </div>
-                <div className="form-grid four-cols-custom">
-                  <Select instanceId="s-state" options={states} placeholder="Estado" styles={customSelectStyles} onChange={handleServiceState} value={serviceState} hasError={!!errors.serviceState} />
-                  <Select instanceId="s-muni" options={serviceMunis} placeholder="Municipio" styles={customSelectStyles} onChange={handleServiceMuni} value={serviceMuni} isDisabled={!serviceState} hasError={!!errors.serviceMuni} />
-                  <Select instanceId="s-parish" options={serviceParishes} placeholder="Parroquia" styles={customSelectStyles} onChange={handleServiceParish} value={serviceParish} isDisabled={!serviceMuni} hasError={!!errors.serviceParish} />
-                  <div className={`input-pill ${errors.service_location ? 'error-border' : ''}`}><input name="service_location" onChange={handleChange} value={formData.service_location} placeholder="Dirección Local" /></div>
-                </div>
-                <div className="form-grid two-cols">
-                  <Select options={opcionesTenencia} value={tenenciaSelect} onChange={(v: any) => { setTenenciaSelect(v); setErrors({ ...errors, tenenciaSelect: null }) }} placeholder="Tenencia" styles={customSelectStyles} hasError={!!errors.tenenciaSelect} />
-                  <div className={`input-pill ${errors.electricity_contract ? 'error-border' : ''}`}><input name="electricity_contract" onChange={handleChange} value={formData.electricity_contract} placeholder="Cuenta CORPOELEC" type="number" /></div>
-                </div>
-                <div className="form-grid four-cols">
-                  <Select options={opcionesTrabajadores} placeholder="Trabajadores" styles={customSelectStyles} onChange={(v: any) => { setWorkersCount(v); setErrors({ ...errors, workersCount: null }) }} value={workersCount} hasError={!!errors.workersCount} />
-                  <Select options={opcionesMesas} placeholder="Mesas" styles={customSelectStyles} onChange={(v: any) => { setTablesCount(v); setErrors({ ...errors, tablesCount: null }) }} value={tablesCount} hasError={!!errors.tablesCount} />
-                  <div className={`input-pill input-date-wrapper ${errors.business_opening_date ? 'error-border' : ''}`}><input name="business_opening_date" type="date" onChange={handleChange} value={formData.business_opening_date} /></div>
-                  <div className={`input-pill input-date-wrapper ${errors.document_date ? 'error-border' : ''}`}><input name="document_date" type="date" onChange={handleChange} value={formData.document_date} /></div>
-                </div>
-              </div>
-            )}
-
-            {currentStep === 3 && (
-              <div className="step-content">
-                <div className="area-box">
-                  <div className="area-inputs">
-                    <div className={`input-pill ${errors.area_size_full ? 'error-border' : ''}`}><input name="area_size_full" type="number" onChange={handleChange} value={formData.area_size_full} placeholder="Área total (m2)" /></div>
-                    <div className={`input-pill ${errors.area_size_util ? 'error-border' : ''}`}><input name="area_size_util" type="number" onChange={handleChange} value={formData.area_size_util} placeholder="Área útil (m2)" /></div>
+                  <div className="input-group">
+                    <div className={`input-pill ${errors.legal_name ? 'error-border' : ''}`}><input name="legal_name" onChange={handleChange} value={formData.legal_name} placeholder="Razón Social" /></div>
                   </div>
-                  <div className="help-bar" onClick={() => setShowAreaModal(true)}>¿Cómo medir las áreas? <FaInfoCircle /></div>
-                  <div className={`input-pill full-width ${errors.cnae_description ? 'error-border' : ''}`}><input name="cnae_description" onChange={handleChange} value={formData.cnae_description} placeholder="Descripción actividad comercial" /></div>
+                  <div className="input-group">
+                    <div className={`input-pill ${errors.commercial_name ? 'error-border' : ''}`}><input name="commercial_name" onChange={handleChange} value={formData.commercial_name} placeholder="Nombre Comercial" /></div>
+                  </div>
+                </div>
+
+                <div className="form-grid four-cols-custom" style={{ marginTop: '25px' }}>
+                  <div className="input-group">
+                    <Select instanceId="f-state" options={states} placeholder="Estado" styles={customSelectStyles} onChange={handleFiscalState} value={fiscalState} hasError={!!errors.fiscalState} />
+                  </div>
+                  <div className="input-group">
+                    <Select instanceId="f-muni" options={fiscalMunis} placeholder="Municipio" styles={customSelectStyles} onChange={handleFiscalMuni} value={fiscalMuni} isDisabled={!fiscalState} hasError={!!errors.fiscalMuni} />
+                  </div>
+                  <div className="input-group">
+                    <Select instanceId="f-parish" options={fiscalParishes} placeholder="Parroquia" styles={customSelectStyles} onChange={handleFiscalParish} value={fiscalParish} isDisabled={!fiscalMuni} hasError={!!errors.fiscalParish} />
+                  </div>
+                  <div className="input-group">
+                    <div className={`input-pill ${errors.fiscal_address ? 'error-border' : ''}`}><input name="fiscal_address" onChange={handleChange} value={formData.fiscal_address} placeholder="Dirección Fiscal" /></div>
+                  </div>
+                </div>
+
+                <div className="form-grid four-cols-custom">
+                  <div className="input-group">
+                    <Select instanceId="s-state" options={states} placeholder="Estado" styles={customSelectStyles} onChange={handleServiceState} value={serviceState} hasError={!!errors.serviceState} />
+                  </div>
+                  <div className="input-group">
+                    <Select instanceId="s-muni" options={serviceMunis} placeholder="Municipio" styles={customSelectStyles} onChange={handleServiceMuni} value={serviceMuni} isDisabled={!serviceState} hasError={!!errors.serviceMuni} />
+                  </div>
+                  <div className="input-group">
+                    <Select instanceId="s-parish" options={serviceParishes} placeholder="Parroquia" styles={customSelectStyles} onChange={handleServiceParish} value={serviceParish} isDisabled={!serviceMuni} hasError={!!errors.serviceParish} />
+                  </div>
+                  <div className="input-group">
+                    <div className={`input-pill ${errors.service_location ? 'error-border' : ''}`}><input name="service_location" onChange={handleChange} value={formData.service_location} placeholder="Dirección del inmueble o local comercial" /></div>
+                  </div>
+                </div>
+
+                <div className="form-grid two-cols">
+                  <div className="input-group">
+                    <Select instanceId="tenancy" options={opcionesTenencia} value={tenenciaSelect} onChange={(v: any) => { setTenenciaSelect(v); setErrors({ ...errors, tenenciaSelect: null }) }} placeholder="Tenencia" styles={customSelectStyles} hasError={!!errors.tenenciaSelect} />
+                  </div>
+                  <div className="input-group">
+                    <div className={`input-pill ${errors.electricity_contract ? 'error-border' : ''}`}><input name="electricity_contract" onChange={handleChange} value={formData.electricity_contract} placeholder="Cuenta contrato anterior de CORPOELECC" type="number" /></div>
+                  </div>
+                </div>
+
+                <div className="form-grid four-cols">
+                  <div className="input-group">
+                    <Select instanceId="workers-select" options={opcionesTrabajadores} placeholder="Cant. trabajadores" styles={customSelectStyles} onChange={(v: any) => { setWorkersCount(v); setErrors({ ...errors, workersCount: null }) }} value={workersCount} hasError={!!errors.workersCount} />
+                  </div>
+                  <div className="input-group">
+                    <Select instanceId="tables-select" options={opcionesMesas} placeholder="Cant. mesas (Restaurantes)" styles={customSelectStyles} onChange={(v: any) => { setTablesCount(v); setErrors({ ...errors, tablesCount: null }) }} value={tablesCount} hasError={!!errors.tablesCount} />
+                  </div>
+                  <div className="input-group">
+                    <div className={`input-pill input-date-wrapper ${errors.business_opening_date ? 'error-border' : ''}`}><input name="business_opening_date" type="date" onChange={handleChange} value={formData.business_opening_date} /></div>
+                  </div>
+                  <div className="input-group">
+                    <div className={`input-pill input-date-wrapper ${errors.document_date ? 'error-border' : ''}`}><input name="document_date" type="date" onChange={handleChange} value={formData.document_date} /></div>
+                  </div>
                 </div>
               </div>
             )}
 
-            {currentStep === 4 && (
-              <div className="step-content">
-                <div className="form-grid two-cols">
-                  <div className={`file-pill ${errors.fileRif ? 'error-border' : ''}`}><label htmlFor="rif" className="file-btn"><FaUpload /></label><input id="rif" type="file" accept="application/pdf" hidden onChange={(e) => handleFileChange(e, 'rif')} /><span>RIF (PDF) {fileRif && '✔'}</span></div>
-                  <div className={`file-pill ${errors.fileContrato ? 'error-border' : ''}`}><label htmlFor="con" className="file-btn"><FaUpload /></label><input id="con" type="file" accept="application/pdf" hidden onChange={(e) => handleFileChange(e, 'contrato')} /><span>Contrato / Doc (PDF) {fileContrato && '✔'}</span></div>
-                </div>
+            {/* PASO 3 */}
+            {currentStep === 3 && (<div className="step-content"><div className="area-box"><div className="area-inputs">
+              <div className="input-group">
+                <div className={`input-pill ${errors.area_size_full ? 'error-border' : ''}`}><input name="area_size_full" type="number" onChange={handleChange} value={formData.area_size_full} placeholder="Área total (m2) Corresponde a la superficie total del establecimiento" /></div>
               </div>
-            )}
+              <div className="input-group">
+                <div className={`input-pill ${errors.area_size_util ? 'error-border' : ''}`}><input name="area_size_util" type="number" onChange={handleChange} value={formData.area_size_util} placeholder="Área útil (m2) Corresponde al área operativa por cada piso" /></div>
+              </div>
+            </div><div className="help-bar" onClick={() => setShowAreaModal(true)}>¿Cómo medir las áreas? <FaInfoCircle /></div>
+              <div className="input-group">
+                <div className={`input-pill full-width ${errors.cnae_description ? 'error-border' : ''}`}><input name="cnae_description" onChange={handleChange} value={formData.cnae_description} placeholder="Descripción de la actividad comercial realizada en el establecimiento:" /></div>
+              </div>
+            </div></div>)}
+
+            {/* PASO 4 */}
+            {currentStep === 4 && (<div className="step-content"><div className="form-grid two-cols">
+              <div className="input-group">
+                <div className={`file-pill ${errors.fileRif ? 'error-border' : ''}`}><label htmlFor="rif" className="file-btn"><FaUpload /></label><input id="rif" type="file" accept="application/pdf" hidden onChange={(e) => handleFileChange(e, 'rif')} /><span>RIF (Requerido en formato PDF) {fileRif && '✔'}</span></div>
+              </div>
+              <div className="input-group">
+                <div className={`file-pill ${errors.fileContrato ? 'error-border' : ''}`}><label htmlFor="con" className="file-btn"><FaUpload /></label><input id="con" type="file" accept="application/pdf" hidden onChange={(e) => handleFileChange(e, 'contrato')} /><span>Documento de propiedad, arrendamiento u otro (Formato PDF) {fileContrato && '✔'}</span></div>
+              </div>
+            </div></div>)}
 
             <div className="btns-container">
               {currentStep > 1 && <button className="btn-back" onClick={handleBack}><FaArrowLeft /> Atrás</button>}
@@ -513,9 +636,135 @@ export default function ActivacionUsuario() {
       </div>
 
       <style jsx>{`
-        .activacion-page { background-color: #e6f2e8; min-height: 100vh; font-family: var(--font-poppins), sans-serif; display: flex; align-items: center; justify-content: center; padding: 40px 20px; }
-        .form-container { width: 100%; max-width: 1050px; margin: 0 auto; }
-        .main-content-box { background: #ffffffc7; border-radius: 35px; padding: 50px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08); backdrop-filter: blur(10px); }
+        /* ESTILOS iOS PARA MODALES (NUEVO) */
+        .modal-overlay { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.5); /* Fondo oscuro */
+            backdrop-filter: blur(5px);   /* Efecto blur de iOS */
+            display: flex; justify-content: center; align-items: center; 
+            z-index: 10000; font-family: var(--font-poppins); 
+        }
+
+        .ios-modal-content {
+            background: white;
+            border-radius: 32px; /* Curva pronunciada */
+            width: 90%;
+            max-width: 420px;    /* Ancho tipo móvil */
+            padding: 24px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.25);
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Efecto rebote suave */
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* HEADER DEL MODAL */
+        .ios-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .ios-modal-header h3 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 800;
+            color: #f54d4dc5;
+        }
+        .ios-close-btn {
+            background: #e4e4e4ff;
+            color: #8e8e93;
+            border: none;
+            width: 32px; height: 32px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .ios-close-btn:hover { background: #e0e0e0; color: #1a1a1a; }
+
+        /* BODY DEL MODAL */
+        .ios-modal-body {
+            margin-bottom: 25px;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+        .ios-modal-subtitle {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 15px;
+        }
+
+        /* LISTA DE ERRORES (Estilo Lista Configuración iOS) */
+        .ios-list-container {
+            display: flex; flex-direction: column; gap: 10px;
+        }
+        .ios-list-item {
+            background: #d8434314;
+            padding: 12px 16px;
+            border-radius: 12px;
+            display: flex; align-items: center; gap: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #e11414ff;
+        }
+        .ios-icon-warn { color: #ff3b30; font-size: 16px; }
+
+        /* TARJETAS INFO (Modal de Áreas) */
+        .ios-info-text { font-size: 14px; color: #666; margin-bottom: 15px; }
+        .ios-info-card {
+            background: #f2f2f7;
+            padding: 15px;
+            border-radius: 16px;
+            margin-bottom: 10px;
+        }
+        .ios-info-card h4 { margin: 0 0 5px 0; font-size: 14px; color: #000; font-weight: 700; }
+        .ios-info-card p { margin: 0; font-size: 12px; color: #555; line-height: 1.4; }
+        .ios-info-card.special { background: #e8f5e9; } 
+        .ios-info-card.special h4 { color: #2e7d32; }
+
+        /* BOTÓN INFERIOR NEGRO */
+        .ios-btn-black {
+            background: #1c1c1e; /* Negro iOS */
+            color: white;
+            width: 100%;
+            padding: 16px;
+            border-radius: 18px; /* Curva suave */
+            border: none;
+            font-weight: 700;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: auto;
+            transition: transform 0.1s;
+        }
+        .ios-btn-black:active { transform: scale(0.98); opacity: 0.9; }
+
+        @keyframes popIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+
+        /* ESTILOS GENERALES PÁGINA (Sin cambios mayores) */
+        input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; }
+
+        .activacion-page { 
+          background-color: #e6f2e8; 
+          min-height: 100vh; 
+          font-family: var(--font-poppins), sans-serif; 
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 40px 20px;
+        }
+        .form-container { 
+          width: 100%;
+          max-width: 1050px; 
+          margin: 0 auto; 
+        }
+        .main-content-box { 
+          background: #ffffffc7; 
+          border-radius: 35px; 
+          padding: 50px; 
+          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08); 
+          backdrop-filter: blur(10px);
+        }
         .hero-banner { background-image: url('/images/empresas/maracay.jpg'); background-size: cover; border-radius: 20px; overflow: hidden; margin-bottom: 20px; height: 160px; position: relative; }
         .hero-overlay { background: linear-gradient(90deg, rgba(76,183,0,0.95), rgba(76,183,0,0.4)); width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; padding: 0 40px; }
         .hero-text h1 { font-size: 28px; font-weight: 900; color: white; margin: 0; text-shadow: 0 2px 4px rgba(0,0,0,0.2); }
@@ -526,36 +775,52 @@ export default function ActivacionUsuario() {
         .two-cols { grid-template-columns: 1fr 1fr; }
         .four-cols { grid-template-columns: 1fr 1fr 1fr 1fr; }
         .four-cols-custom { grid-template-columns: 1fr 1fr 1fr 2fr; }
+        
+        .input-group { display: flex; flex-direction: column; }
+        
+        .input-pill.error-border input { border-color: #dc3545 !important; }
+        .file-pill.error-border { border-color: #dc3545 !important; }
+        .combined.error-border { border-color: #dc3545 !important; }
+
         .input-pill { position: relative; width: 100%; }
-        .input-pill input { width: 100%; background-color: white; border: 1px solid #ccc; border-radius: 10px; padding: 0 20px; height: 42px; font-size: 14px; outline: none; transition: 0.2s; font-family: var(--font-poppins); }
+        .input-pill input { width: 100%; background-color: white; border: 1px solid #ccc; border-radius: 10px; padding: 0 20px; height: 42px; font-size: 14px; color: #333; outline: none; transition: 0.2s; font-family: var(--font-poppins); }
         .input-pill input:focus { border-color: #4CB700; }
         .combined { display: flex; align-items: center; background-color: white; border-radius: 10px; border: 1px solid #ccc; padding: 0 5px 0 15px; }
         .combined input { border: none !important; }
         .vert-divider { width: 1px; height: 20px; background: #ccc; margin: 0 5px; }
+        .input-date-wrapper { position: relative; }
         .area-box { background: white; padding: 25px; border-radius: 15px; border: 1px solid #ccc; }
         .area-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
         .help-bar { background: #4cb7002e; color: #555; font-weight: 700; padding: 10px; border-radius: 50px; cursor: pointer; font-size: 13px; margin-bottom: 15px; display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid #ddd; }
         .file-pill { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 50px; padding: 10px 20px; display: flex; align-items: center; gap: 15px; width: 100%; transition: all 0.2s; }
         .file-pill span { font-size: 13px; color: #444; font-weight: 500; text-align: left; flex: 1; }
-        .file-btn { background: #eee; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #555; }
+        .file-label { font-size: 12px; color: #555; font-weight: 600; }
+        .file-btn { background: #eee; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #555; }
         .file-btn:hover { background: #4CB700; color: white; }
+        .file-check { font-size: 11px; color: #4CB700; font-weight: bold; margin-left: 10px; }
         .btns-container { display: flex; justify-content: space-between; margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; }
-        .btn-next, .btn-send { background: #4CB700; color: white; padding: 12px 40px; border-radius: 50px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 10px; }
-        .btn-back { background: white; color: #777; border: 2px solid #ddd; padding: 12px 30px; border-radius: 50px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 10px; }
+        .btn-next, .btn-send { background: #4CB700; color: white; padding: 12px 40px; border-radius: 50px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 10px; font-family: var(--font-poppins), sans-serif; }
+        .btn-back { background: white; color: #777; border: 2px solid #ddd; padding: 12px 30px; border-radius: 50px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 10px; font-family: var(--font-poppins), sans-serif; }
+        .btn-back:hover { border-color: #4CB700; color: #4CB700; }
         .step-indicator { margin-bottom: 30px; text-align: right; color: #4CB700; font-weight: 900; font-size: 14px; }
         .progress-bar { height: 6px; background: #e0e0e0; border-radius: 3px; margin-top: 5px; overflow: hidden; }
         .progress-fill { height: 100%; background: #4CB700; transition: width 0.3s ease; }
-        
-        /* Modales iOS */
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); backdrop-filter: blur(5px); display: flex; justify-content: center; align-items: center; z-index: 10000; }
-        .ios-modal-content { background: white; border-radius: 32px; width: 90%; max-width: 420px; padding: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.25); display: flex; flex-direction: column; }
-        .ios-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .ios-close-btn { background: #e4e4e4; color: #8e8e93; border: none; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-        .ios-list-item { background: #d8434314; padding: 12px 16px; border-radius: 12px; display: flex; align-items: center; gap: 12px; font-size: 13px; font-weight: 600; color: #e11414; }
-        .ios-info-card { background: #f2f2f7; padding: 15px; border-radius: 16px; margin-bottom: 10px; }
-        .ios-btn-black { background: #1c1c1e; color: white; width: 100%; padding: 16px; border-radius: 18px; border: none; font-weight: 700; font-size: 16px; cursor: pointer; }
 
-        @media (max-width: 768px) { .activacion-page { padding: 20px 10px; display: block; } .form-container { padding: 0; margin: 0 15px 15px 15px; } .main-content-box { padding: 2rem 1.5rem; } .three-cols, .two-cols, .four-cols, .four-cols-custom, .area-inputs { grid-template-columns: 1fr; } }
+        @media (max-width: 768px) { 
+          .activacion-page {
+            padding: 20px 10px;
+            display: block; /* Desactivar centrado vertical en móviles para permitir scroll natural */
+          }
+          .form-container {
+            padding: 0;
+            margin: 0 15px 15px 15px;
+          }
+          .main-content-box {
+            padding: 2.5rem 1.5rem;
+          }
+          .three-cols, .two-cols, .four-cols, .four-cols-custom { grid-template-columns: 1fr; } 
+          .area-inputs { grid-template-columns: 1fr; } 
+        }
       `}</style>
     </div>
   );
