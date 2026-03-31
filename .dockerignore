@@ -1,0 +1,31 @@
+# Excluir del contexto de build de Docker para imágenes más rápidas y livianas
+
+# Dependencias (se reinstalan en el Stage 1)
+node_modules
+npm-debug.log*
+
+# Build artifacts (se generan en Stage 2)
+.next
+out
+build
+
+# Control de versiones
+.git
+.gitignore
+
+# Variables de entorno (se pasan en runtime, no en build)
+.env
+.env.local
+.env.development
+.env.test
+
+# Archivos de desarrollo
+*.md
+.eslintrc*
+eslint.config*
+postcss.config*
+tsconfig*.json
+
+# Sistema operativo
+.DS_Store
+Thumbs.db

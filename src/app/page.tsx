@@ -163,7 +163,7 @@ export default function ActivacionUsuario() {
       .catch(console.error);
 
     // --- PROTOCOLO RECUPERACIÓN MAL INTERNET ---
-    const backup = localStorage.getItem('backup_error_envio');
+    const backup = sessionStorage.getItem('backup_error_envio');
     if (backup) {
       try {
         const { timestamp, data } = JSON.parse(backup);
@@ -185,10 +185,10 @@ export default function ActivacionUsuario() {
             if (data.serviceMuni) setServiceMuni(data.serviceMuni);
             if (data.serviceParish) setServiceParish(data.serviceParish);
           } else {
-            localStorage.removeItem('backup_error_envio');
+            sessionStorage.removeItem('backup_error_envio');
           }
         } else {
-          localStorage.removeItem('backup_error_envio');
+          sessionStorage.removeItem('backup_error_envio');
         }
       } catch (e) { console.error(e); }
     }
@@ -340,12 +340,12 @@ export default function ActivacionUsuario() {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
       });
       const result = await res.json();
-      if (result.success) { localStorage.removeItem('backup_error_envio'); setIsSuccess(true); } 
-      else { alert(`Error: ${result.error || 'Verifique los datos'}`); }
+      if (result.success) { sessionStorage.removeItem('backup_error_envio'); setIsSuccess(true); } 
+      else { alert('Error al enviar la solicitud. Por favor verifique los datos e intente nuevamente.'); }
     } catch (error) {
       const dataToSave = { formData, prefijoCedula, prefijoRif, workersCount, tablesCount, tenenciaSelect, fiscalState, fiscalMuni, fiscalParish, serviceState, serviceMuni, serviceParish };
-      localStorage.setItem('backup_error_envio', JSON.stringify({ timestamp: Date.now(), data: dataToSave }));
-      alert('Error de conexión. Se guardó una copia de seguridad en su navegador por 24 horas.');
+      sessionStorage.setItem('backup_error_envio', JSON.stringify({ timestamp: Date.now(), data: dataToSave }));
+      alert('Error de conexión. Se guardó un respaldo temporal en esta sesión del navegador.');
     } finally { setLoading(false); }
   };
 

@@ -1,14 +1,54 @@
 services:
   formulario-app:
-    # Nombre que tendrá la imagen cuando la construyas
     image: formulario-proyecto:latest
     container_name: formulario-contenedor
     restart: always
     ports:
-      - "7000:7000" # Mapea el puerto del host al del contenedor
-    env_file:
-      - .env
+      - "7000:7000"
     environment:
-      - HOSTNAME=0.0.0.0
-      - PORT=7000
       - NODE_ENV=production
+      - PORT=7000
+      - HOSTNAME=0.0.0.0
+      # Las variables secretas se pasan desde el entorno del host
+      # o desde un archivo .env que NO debe estar en el repositorio
+      - ODOO_API_URL=${ODOO_API_URL}
+      - ODOO_API_KEY=${ODOO_API_KEY}
+    # Límites de recursos para prevenir DoS
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+    # Seguridad: contenedor sin privilegios adicionales
+    security_opt:
+      - no-new-privileges:true
+    # Solo lectura el filesystem del contenedor (Next.js standalone lo soporta)
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:7000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Despliegue continuo: monitorea y actualiza el contenedor automáticamente
+  watchtower:
+    image: containrrr/watchtower
+    container_name: formulario-watchtower
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=true          # Elimina imágenes antiguas
+      - WATCHTOWER_POLL_INTERVAL=30      # Chequea cada 30 segundos
+      - WATCHTOWER_LABEL_ENABLE=false    # Monitorea todos los contenedores
+      - WATCHTOWER_INCLUDE_STOPPED=false
+    security_opt:
+      - no-new-privileges:true
+    # Limitar Watchtower a solo monitorear nuestro contenedor
+    command: formulario-contenedor

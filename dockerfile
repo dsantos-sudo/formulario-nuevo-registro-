@@ -1,29 +1,53 @@
-import type { NextConfig } from "next";
+# ============================================================
+# Stage 1: Instalar dependencias de producción
+# ============================================================
+FROM node:20-alpine AS deps
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
 
-const nextConfig: NextConfig = {
-// 1. Optimización para Docker (CRÍTICO)
-output: "standalone",
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
 
-// 2. Ignorar errores estrictos para que el Build no falle en CI/CD
-eslint: { ignoreDuringBuilds: true },
-typescript: { ignoreBuildErrors: true },
+# ============================================================
+# Stage 2: Build de la aplicación Next.js
+# ============================================================
+FROM node:20-alpine AS builder
+WORKDIR /app
 
-// 3. Configuración del Proxy (El túnel hacia Odoo)
-async rewrites() {
-// Si existe la variable de entorno la usa, si no, usa la de Odoo Dev por defecto
-const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://gestion-dev.odoo.com/api/v1';
+# Copiar dependencias del stage anterior
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
 
-return [
-{
-// Cuando tu Frontend llame a: /api/proxy/usuarios...
-source: '/api/proxy/:path*',
-// ...Next.js lo redirigirá invisiblemente a: https://gestion-dev.odoo.com/api/v1/usuarios
-destination: `/:path*`, 
-},
-];
-},
+# Variables necesarias solo durante el build
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
 
-reactStrictMode: true,
-};
+RUN npm run build
 
-export default nextConfig;
+# ============================================================
+# Stage 3: Imagen final mínima (solo el standalone output)
+# ============================================================
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+# Puerto en el que escucha la app dentro del contenedor
+ENV PORT=7000
+ENV HOSTNAME=0.0.0.0
+
+# Crear usuario no-root para seguridad
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
+# Copiar solo los artefactos necesarios del build standalone
+COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+USER nextjs
+
+EXPOSE 7000
+
+# Servidor Node.js standalone generado por Next.js
+CMD ["node", "server.js"]
