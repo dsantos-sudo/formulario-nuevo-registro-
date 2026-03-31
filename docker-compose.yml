@@ -1,57 +1,31 @@
+version: '3.8'
 services:
   formulario-app:
-    # Imagen publicada por GitHub Actions en cada push a main
-    # Reemplaza 'dsantos-sudo' con tu usuario y el nombre exacto del repo en GitHub
     image: ghcr.io/dsantos-sudo/formulario-nuevo-registro:latest
     container_name: formulario-contenedor
     restart: always
     ports:
       - "7000:7000"
-    environment:
-      - NODE_ENV=production
-      - PORT=7000
-      - HOSTNAME=0.0.0.0
-      # Las variables secretas se leen del entorno del host (no hardcodeadas)
-      - ODOO_API_URL=${ODOO_API_URL}
-      - ODOO_API_KEY=${ODOO_API_KEY}
-    # Límites de recursos para prevenir DoS
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 512M
-        reservations:
-          cpus: "0.25"
-          memory: 128M
-    # Seguridad: contenedor sin privilegios adicionales
-    security_opt:
-      - no-new-privileges:true
-    # Solo lectura el filesystem del contenedor
-    read_only: true
-    tmpfs:
-      - /tmp
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:7000/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+    env_file:
+      - .env
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-  # Despliegue continuo: monitorea ghcr.io y actualiza el contenedor automáticamente
   watchtower:
     image: containrrr/watchtower
-    container_name: formulario-watchtower
+    container_name: watchtower-formulario
     restart: always
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      # Credenciales para hacer pull de ghcr.io (registro privado)
-      - /root/.docker/config.json:/config.json:ro
-    environment:
-      - WATCHTOWER_CLEANUP=true          # Elimina imágenes antiguas tras actualizar
-      - WATCHTOWER_POLL_INTERVAL=30      # Chequea cada 30 segundos
-      - WATCHTOWER_INCLUDE_STOPPED=false
-      - DOCKER_CONFIG=/config.json
-    security_opt:
-      - no-new-privileges:true
-    # Solo monitorear nuestro contenedor (no todos los del servidor)
-    command: formulario-contenedor
+      - /root/.docker/config.json:/config.json
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    command: --interval 300 --cleanup --label-enable --debug
