@@ -2,7 +2,7 @@ services:
   formulario-app:
     # Imagen publicada por GitHub Actions en cada push a main
     # Reemplaza 'dsantos-sudo' con tu usuario y el nombre exacto del repo en GitHub
-    image: ghcr.io/dsantos-sudo/formulario-nuevo-registro-:latest
+    image: ghcr.io/dsantos-sudo/formulario-nuevo-registro:latest
     container_name: formulario-contenedor
     restart: always
     ports:
