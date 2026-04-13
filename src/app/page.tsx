@@ -356,7 +356,7 @@ export default function ActivacionUsuario() {
           <div className="checkmark-container"><FaCheckCircle className="checkmark-icon" /></div>
           <h2>¡Solicitud Enviada!</h2>
           <p className="success-text">Hemos recibido tu información correctamente. Recibirás respuesta en 48 horas.</p>
-          <button className="ios-btn-black" onClick={() => window.location.href = 'https://fospuca-internacional-odoo.odoo.com/inico'}>Finalizar</button>
+          <button className="ios-btn-black" onClick={() => window.location.reload()}>Finalizar</button>
         </div>
         <style jsx>{`
             .success-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); backdrop-filter: blur(8px); display: flex; justify-content: center; align-items: center; z-index: 9999; font-family: var(--font-poppins); }
@@ -504,10 +504,12 @@ export default function ActivacionUsuario() {
               </div>
             )}
 
-            <div className="btns-container" style={currentStep === 1 ? { justifyContent: 'flex-start', gap: '15px' } : undefined}>
-              {currentStep === 1 && <button type="button" className="btn-back" onClick={() => window.location.href = 'https://fospuca-internacional-odoo.odoo.com/inico'}><FaArrowLeft /> Ir al inicio</button>}
-              {currentStep > 1 && <button className="btn-back" onClick={handleBack}><FaArrowLeft /> Atrás</button>}
-              {currentStep < 4 ? <button className="btn-next" onClick={handleNext}>Siguiente <FaArrowRight /></button> : <button className="btn-send" onClick={handleSubmit}>Enviar</button>}
+            <div className="btns-container">
+              <a href="https://fospuca-internacional-odoo.odoo.com/inico" className="btn-back" style={{ textDecoration: 'none' }}>Ir al inicio</a>
+              <div style={{ display: 'flex', gap: '10px', marginLeft: 'auto' }}>
+                {currentStep > 1 && <button className="btn-back" onClick={handleBack}><FaArrowLeft /> Atrás</button>}
+                {currentStep < 4 ? <button className="btn-next" onClick={handleNext}>Siguiente <FaArrowRight /></button> : <button className="btn-send" onClick={handleSubmit}>Enviar</button>}
+              </div>
             </div>
           </form>
         </div>
@@ -528,8 +530,7 @@ export default function ActivacionUsuario() {
         .four-cols { grid-template-columns: 1fr 1fr 1fr 1fr; }
         .four-cols-custom { grid-template-columns: 1fr 1fr 1fr 2fr; }
         .input-pill { position: relative; width: 100%; }
-        .input-pill input { width: 100%; background-color: white; border: 1px solid #ccc; border-radius: 10px; padding: 0 20px; height: 42px; font-size: 14px; outline: none; transition: 0.2s; font-family: var(--font-poppins); color: #333; }
-        .input-pill input::placeholder { color: #888; }
+        .input-pill input { width: 100%; background-color: white; border: 1px solid #ccc; border-radius: 10px; padding: 0 20px; height: 42px; font-size: 14px; outline: none; transition: 0.2s; font-family: var(--font-poppins); }
         .input-pill input:focus { border-color: #4CB700; }
         .combined { display: flex; align-items: center; background-color: white; border-radius: 10px; border: 1px solid #ccc; padding: 0 5px 0 15px; }
         .combined input { border: none !important; }
@@ -552,14 +553,9 @@ export default function ActivacionUsuario() {
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); backdrop-filter: blur(5px); display: flex; justify-content: center; align-items: center; z-index: 10000; }
         .ios-modal-content { background: white; border-radius: 32px; width: 90%; max-width: 420px; padding: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.25); display: flex; flex-direction: column; }
         .ios-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .ios-modal-header h3 { color: #111; }
         .ios-close-btn { background: #e4e4e4; color: #8e8e93; border: none; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-        .ios-modal-subtitle { color: #333; }
         .ios-list-item { background: #d8434314; padding: 12px 16px; border-radius: 12px; display: flex; align-items: center; gap: 12px; font-size: 13px; font-weight: 600; color: #e11414; }
-        .ios-info-text { color: #444; }
         .ios-info-card { background: #f2f2f7; padding: 15px; border-radius: 16px; margin-bottom: 10px; }
-        .ios-info-card h4 { color: #222; }
-        .ios-info-card p { color: #555; }
         .ios-btn-black { background: #1c1c1e; color: white; width: 100%; padding: 16px; border-radius: 18px; border: none; font-weight: 700; font-size: 16px; cursor: pointer; }
 
         @media (max-width: 768px) { .activacion-page { padding: 20px 10px; display: block; } .form-container { padding: 0; margin: 0 15px 15px 15px; } .main-content-box { padding: 2rem 1.5rem; } .three-cols, .two-cols, .four-cols, .four-cols-custom, .area-inputs { grid-template-columns: 1fr; } }
