@@ -527,7 +527,8 @@ export default function ActivacionUsuario() {
         .four-cols { grid-template-columns: 1fr 1fr 1fr 1fr; }
         .four-cols-custom { grid-template-columns: 1fr 1fr 1fr 2fr; }
         .input-pill { position: relative; width: 100%; }
-        .input-pill input { width: 100%; background-color: white; border: 1px solid #ccc; border-radius: 10px; padding: 0 20px; height: 42px; font-size: 14px; outline: none; transition: 0.2s; font-family: var(--font-poppins); }
+        .input-pill input { width: 100%; background-color: white; border: 1px solid #ccc; border-radius: 10px; padding: 0 20px; height: 42px; font-size: 14px; outline: none; transition: 0.2s; font-family: var(--font-poppins); color: #333; }
+        .input-pill input::placeholder { color: #888; }
         .input-pill input:focus { border-color: #4CB700; }
         .combined { display: flex; align-items: center; background-color: white; border-radius: 10px; border: 1px solid #ccc; padding: 0 5px 0 15px; }
         .combined input { border: none !important; }
