@@ -146,12 +146,12 @@ export default function ActivacionUsuario() {
     document.body.classList.add('activacion-loaded');
 
     fetch(`/api/maestros?type=states`)
-      .then(r => r.json())
+      .then(r => r.ok ? r.json() : [])
       .then(d => { if (Array.isArray(d)) setStates(d.map((x: any) => ({ value: x.id, label: x.name }))) })
       .catch(console.error);
 
     fetch(`/api/maestros?type=doc_types`)
-      .then(r => r.json())
+      .then(r => r.ok ? r.json() : [])
       .then(d => {
         if (Array.isArray(d)) {
           const mapped = d.map((x: any) => ({ value: x.id, label: x.id }));
@@ -198,14 +198,14 @@ export default function ActivacionUsuario() {
   const handleFiscalState = (opt: any) => {
     setFiscalState(opt); setFiscalMuni(null); setFiscalParish(null); setFiscalMunis([]);
     if (opt) {
-      fetch(`/api/maestros?type=municipalities&parent_id=${opt.value}`).then(r => r.json()).then(d => setFiscalMunis(d.map((x: any) => ({ value: x.id, label: x.name }))));
+      fetch(`/api/maestros?type=municipalities&parent_id=${opt.value}`).then(r => r.ok ? r.json() : []).then(d => setFiscalMunis(d.map((x: any) => ({ value: x.id, label: x.name }))));
       setErrors((prev: any) => ({ ...prev, fiscalState: null }));
     }
   };
   const handleFiscalMuni = (opt: any) => {
     setFiscalMuni(opt); setFiscalParish(null); setFiscalParishes([]);
     if (opt) {
-      fetch(`/api/maestros?type=parishes&parent_id=${opt.value}`).then(r => r.json()).then(d => setFiscalParishes(d.map((x: any) => ({ value: x.id, label: x.name }))));
+      fetch(`/api/maestros?type=parishes&parent_id=${opt.value}`).then(r => r.ok ? r.json() : []).then(d => setFiscalParishes(d.map((x: any) => ({ value: x.id, label: x.name }))));
       setErrors((prev: any) => ({ ...prev, fiscalMuni: null }));
     }
   };
@@ -214,14 +214,14 @@ export default function ActivacionUsuario() {
   const handleServiceState = (opt: any) => {
     setServiceState(opt); setServiceMuni(null); setServiceParish(null); setServiceMunis([]);
     if (opt) {
-      fetch(`/api/maestros?type=municipalities&parent_id=${opt.value}`).then(r => r.json()).then(d => setServiceMunis(d.map((x: any) => ({ value: x.id, label: x.name }))));
+      fetch(`/api/maestros?type=municipalities&parent_id=${opt.value}`).then(r => r.ok ? r.json() : []).then(d => setServiceMunis(d.map((x: any) => ({ value: x.id, label: x.name }))));
       setErrors((prev: any) => ({ ...prev, serviceState: null }));
     }
   };
   const handleServiceMuni = (opt: any) => {
     setServiceMuni(opt); setServiceParish(null); setServiceParishes([]);
     if (opt) {
-      fetch(`/api/maestros?type=parishes&parent_id=${opt.value}`).then(r => r.json()).then(d => setServiceParishes(d.map((x: any) => ({ value: x.id, label: x.name }))));
+      fetch(`/api/maestros?type=parishes&parent_id=${opt.value}`).then(r => r.ok ? r.json() : []).then(d => setServiceParishes(d.map((x: any) => ({ value: x.id, label: x.name }))));
       setErrors((prev: any) => ({ ...prev, serviceMuni: null }));
     }
   };
@@ -339,7 +339,7 @@ export default function ActivacionUsuario() {
       const res = await fetch(`/api/crear-solicitud`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
       });
-      const result = await res.json();
+      const result = res.ok ? await res.json() : { success: false };
       if (result.success) { sessionStorage.removeItem('backup_error_envio'); setIsSuccess(true); } 
       else { alert('Error al enviar la solicitud. Por favor verifique los datos e intente nuevamente.'); }
     } catch (error) {
