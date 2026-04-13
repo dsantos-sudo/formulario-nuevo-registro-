@@ -402,13 +402,21 @@ export default function ActivacionUsuario() {
         <div className="modal-overlay" onClick={() => setShowAreaModal(false)}>
           <div className="ios-modal-content" onClick={e => e.stopPropagation()}>
             <div className="ios-modal-header">
-              <h3>¿Cómo medir las áreas?</h3>
+              <h3>¿Cómo medir las <span style={{color:'#e74c3c'}}>áreas utiles</span>, <span style={{color:'#e74c3c'}}>especial</span> y <span style={{color:'#e74c3c'}}>total</span>?</h3>
               <button className="ios-close-btn" onClick={() => setShowAreaModal(false)}><FaTimes /></button>
             </div>
             <div className="ios-modal-body">
-              <p className="ios-info-text">El Área Útil se refiere solo a los espacios operativos usados para su negocio. El Área Total incluye la superficie completa.</p>
-              <div className="ios-info-card"><h4>Área Útil (m²)</h4><p>Espacios donde realmente trabaja (piso de venta, oficina, etc).</p></div>
-              <div className="ios-info-card"><h4>Área Total (m²)</h4><p>Superficie completa del inmueble.</p></div>
+              <p className="ios-info-text">El Área Útil se refiere solo a los espacios operativos usados para su negocio, y esta medida podrá ser revisada por nuestro personal. Para locales vacíos o sin actividad, debe indicar el Área Total en ambos campos.</p>
+              <div className="ios-info-card">
+                <h4>Área Útil (m²)</h4>
+                <p>Se refiere únicamente a los espacios operativos. es decir, el área que se utiliza específicamente para las actividades de su negocio.</p>
+                <p style={{marginTop:'6px'}}><strong>Importante:</strong> Esta medida está sujeta a revisión por parte del equipo especializado y podría ser objeto de inspección.</p>
+              </div>
+              <div className="ios-info-card"><h4>Área Total (m²)</h4><p>Se refiere a la superficie completa del establecimiento.</p></div>
+              <div className="ios-info-card" style={{background:'#e8f5e9', borderLeft:'4px solid #4CB700'}}>
+                <h4 style={{color:'#4CB700'}}>Caso Especial (Inmuebles Vacíos):</h4>
+                <p>Si el local o inmueble se encuentra vacío o sin actividad, deberá indicar la superficie total en ambos campos (tanto en Área Total como en Área Útil).</p>
+              </div>
             </div>
             <button className="ios-btn-black" onClick={() => setShowAreaModal(false)}>Cerrar guía</button>
           </div>
