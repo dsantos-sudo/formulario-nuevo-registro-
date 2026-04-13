@@ -356,7 +356,7 @@ export default function ActivacionUsuario() {
           <div className="checkmark-container"><FaCheckCircle className="checkmark-icon" /></div>
           <h2>¡Solicitud Enviada!</h2>
           <p className="success-text">Hemos recibido tu información correctamente. Recibirás respuesta en 48 horas.</p>
-          <button className="ios-btn-black" onClick={() => window.location.reload()}>Finalizar</button>
+          <button className="ios-btn-black" onClick={() => window.location.href = 'https://fospuca-internacional-odoo.odoo.com/inico'}>Finalizar</button>
         </div>
         <style jsx>{`
             .success-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); backdrop-filter: blur(8px); display: flex; justify-content: center; align-items: center; z-index: 9999; font-family: var(--font-poppins); }
