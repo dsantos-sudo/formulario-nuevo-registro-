@@ -21,7 +21,11 @@ export async function GET(request) {
     return NextResponse.json({ error: 'Invalid type parameter' }, { status: 400 });
   }
 
-  if (type === 'doc_types') return NextResponse.json(DOCUMENT_TYPES);
+  if (type === 'doc_types') {
+    return NextResponse.json(DOCUMENT_TYPES, {
+      headers: { 'Cache-Control': 'public, max-age=3600, s-maxage=3600' },
+    });
+  }
 
   const BASE_URL = process.env.ODOO_API_URL;
   const API_KEY = process.env.ODOO_API_KEY;
@@ -68,7 +72,9 @@ export async function GET(request) {
 
     const data = await res.json();
     const items = Array.isArray(data) ? data : (data.result || data.data || []);
-    return NextResponse.json(items);
+    return NextResponse.json(items, {
+      headers: { 'Cache-Control': 'public, max-age=300, s-maxage=300' },
+    });
   } catch (error) {
     console.error('[maestros] Proxy error:', error);
     return NextResponse.json([]);

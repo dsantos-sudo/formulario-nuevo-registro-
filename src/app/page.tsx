@@ -104,8 +104,7 @@ export default function ActivacionUsuario() {
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorList, setErrorList] = useState<string[]>([]);
 
-  // Variable de entorno para la API
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+
 
   // --- DATOS API ---
   const [docTypes, setDocTypes] = useState<any[]>([]);

@@ -34,8 +34,21 @@ const ALLOWED_FIELDS = [
   'rental_contract_photo',
 ];
 
+// Campos que son strings de texto libre (se sanitizan)
+const TEXT_FIELDS = [
+  'name_person', 'last_name_person', 'legal_name', 'commercial_name',
+  'fiscal_address', 'service_location', 'cnae_description', 'email',
+  'phone', 'mobile', 'electricity_contract',
+];
+
 // Límite de tamaño del body: 15 MB (para soportar hasta 2 PDFs de 5MB en base64)
 const MAX_BODY_SIZE_BYTES = 15 * 1024 * 1024;
+
+// Sanitizar texto: trim + eliminar tags HTML
+function sanitizeText(value) {
+  if (typeof value !== 'string') return value;
+  return value.trim().replace(/<[^>]*>/g, '');
+}
 
 export async function POST(request) {
   const ODOO_URL = `${process.env.ODOO_API_URL}/inspections/request`;
@@ -44,6 +57,20 @@ export async function POST(request) {
   if (!ODOO_URL || !API_KEY) {
     console.error('[crear-solicitud] Missing environment variables');
     return NextResponse.json({ success: false, error: 'Server configuration error' }, { status: 500 });
+  }
+
+  // --- Protección CSRF: validar Origin / Referer ---
+  const origin = request.headers.get('origin');
+  const referer = request.headers.get('referer');
+  const host = request.headers.get('host');
+
+  if (origin && host && !origin.includes(host)) {
+    console.error(`[crear-solicitud] CSRF blocked: origin=${origin} host=${host}`);
+    return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+  }
+  if (!origin && referer && host && !referer.includes(host)) {
+    console.error(`[crear-solicitud] CSRF blocked: referer=${referer} host=${host}`);
+    return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
   }
 
   // Verificar tamaño del body antes de parsear
@@ -55,11 +82,13 @@ export async function POST(request) {
   try {
     const rawBody = await request.json();
 
-    // Construir payload con solo los campos permitidos (whitelist)
+    // Construir payload con solo los campos permitidos (whitelist) + sanitización
     const sanitizedBody = {};
     for (const field of ALLOWED_FIELDS) {
       if (rawBody[field] !== undefined) {
-        sanitizedBody[field] = rawBody[field];
+        sanitizedBody[field] = TEXT_FIELDS.includes(field)
+          ? sanitizeText(rawBody[field])
+          : rawBody[field];
       }
     }
 
